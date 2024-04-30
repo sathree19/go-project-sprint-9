@@ -8,29 +8,21 @@ import (
 	"time"
 )
 
-var mu sync.RWMutex
-var wg sync.WaitGroup
-
 // Generator генерирует последовательность чисел 1,2,3 и т.д. и
 // отправляет их в канал ch. При этом после записи в канал для каждого числа
 // вызывается функция fn. Она служит для подсчёта количества и суммы
 // сгенерированных чисел.
 func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 	// 1. Функция Generator
-	defer wg.Done()
 	defer close(ch)
-	var N []int64
-	N = append(N, 1)
 	var i int
-	for {
+	for i = 1; i > 0; i++ {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			ch <- N[i]
-			fn(N[i])
-			i++
-			N = append(N, N[i-1]+1)
+			ch <- int64(i)
+			fn(int64(i))
 		}
 	}
 
@@ -39,7 +31,6 @@ func Generator(ctx context.Context, ch chan<- int64, fn func(int64)) {
 // Worker читает число из канала in и пишет его в канал out.
 func Worker(in <-chan int64, out chan<- int64) {
 	// 2. Функция Worker
-	defer wg.Done()
 	defer close(out)
 	for {
 		v, ok := <-in
@@ -53,6 +44,8 @@ func Worker(in <-chan int64, out chan<- int64) {
 }
 
 func main() {
+	var mu sync.RWMutex
+
 	chIn := make(chan int64)
 
 	// 3. Создание контекста
@@ -64,7 +57,7 @@ func main() {
 	var inputCount int64 // количество сгенерированных чисел
 
 	// генерируем числа, считая параллельно их количество и сумму
-	wg.Add(1)
+
 	go Generator(ctx, chIn, func(i int64) {
 		mu.Lock()
 		defer mu.Unlock()
@@ -77,7 +70,6 @@ func main() {
 	// outs — слайс каналов, куда будут записываться числа из chIn
 	outs := make([]chan int64, NumOut)
 	for i := 0; i < NumOut; i++ {
-		wg.Add(1)
 		// создаём каналы и для каждого из них вызываем горутину Worker
 		outs[i] = make(chan int64)
 		go Worker(chIn, outs[i])
